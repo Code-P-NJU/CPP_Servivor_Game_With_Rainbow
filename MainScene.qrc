@@ -1,0 +1,35 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Resources/determination.png</file>
+        <file>Resources/Black_Backgrounds.png</file>
+        <file>Resources/Red_Heart.png</file>
+        <file>Resources/Medicine.png</file>
+        <file>Resources/White_Heart.png</file>
+        <file>Resources/GAME_OVER.png</file>
+        <file>Resources/enemy_2.png</file>
+        <file>Resources/bullet.png</file>
+        <file>Resources/Changed_Red_Heart_0.png</file>
+        <file>Resources/Changed_Red_Heart_2.png</file>
+        <file>Resources/Changed_Red_Heart_3.png</file>
+        <file>Resources/Changed_Red_Heart.png</file>
+        <file>Resources/WIN.png</file>
+        <file>Resources/Start_Menu_Background.png</file>
+        <file>Resources/Happy_Birthday.png</file>
+        <file>Resources/homo.png</file>
+        <file>Resources/WhiteBlock.png</file>
+        <file>Resources/WhiteBlock2.png</file>
+        <file>Resources/RedBlock.png</file>
+    </qresource>
+    <qresource prefix="/Knife_2">
+        <file>Resources/Weapon_2.png</file>
+        <file>Resources/Weapon_2_2.png</file>
+        <file>Resources/Weapon_2_3.png</file>
+        <file>Resources/Weapon_2_0.png</file>
+    </qresource>
+    <qresource prefix="/Knife_1">
+        <file>Resources/knife_2.png</file>
+        <file>Resources/knife_2_2.png</file>
+        <file>Resources/knife_2_3.png</file>
+        <file>Resources/knife_2_0.png</file>
+    </qresource>
+</RCC>

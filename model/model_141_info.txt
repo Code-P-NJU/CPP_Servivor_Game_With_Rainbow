@@ -1,0 +1,162 @@
+double gamma = 0.98;//折扣因子,一般在[0,1]之间，越大越在乎远期利益，0时只在乎眼前收益,经验公式: 到达终点需要的平均step=1/(1-gamma)
+double lr = 1e-2; //初始学习率
+double min_lr = 1e-6;//最低学习率
+//double epsilon = 0.3;//随机动作的概率,越大越随机
+int batch_size = 64;
+int target_update = 500;
+float delta = 10;//huberloss参数
+float alpha = 0.6;//优先级经验回放的参数alpha,决定我们要使用多少 ISweight 的影响, 如果 alpha = 0, 我们就没使用到任何 Importance Sampling.
+float beta = 0.4;//优先级经验回放的参数beta,决定你有多大的程度想抵消Prioritized Experience Replay对收敛结果的影响。
+int steplr_step_size = 1;
+float steplr_gamma = 0.9;
+int n = 0;//倒数n次迭代保持epsilon最低
+int N_step_replay = 3;//multi_step dqn,取1时退化为传统dqn
+const std::string PATH = { "model//model.pt" };
+int episode_num = 10000, Iteration_num = 100;
+
+class neuro_net_v1Impl :public torch::nn::Module
+{
+public:
+	torch::nn::Conv2d conv1 = nullptr;//卷积层1
+	torch::nn::Conv2d conv2 = nullptr;//卷积层2
+	torch::nn::Conv2d conv3 = nullptr;//卷积层3
+	torch::nn::Conv2d conv4 = nullptr;//卷积层4
+	torch::nn::MaxPool2d pool = nullptr;//池化层
+	torch::nn::Dropout dropout = nullptr;//dropout层减轻过拟合
+	//
+	NoisyLinear Linear1 = nullptr;//线性层1
+	torch::nn::Linear Linear2 = nullptr;//线性层2
+	NoisyLinear Linear3 = nullptr;//线性层3
+	//用来预测state_value
+	NoisyLinear Linear4 = nullptr;//线性层4
+	torch::nn::Linear Linear5 = nullptr;//线性层5
+	NoisyLinear Linear6 = nullptr;//线性层6
+	//用来预测action_value
+	//
+	torch::nn::LeakyReLU acti;//激活层使用leakyRelu
+	torch::nn::LayerNorm LN1 = nullptr;
+	torch::nn::LayerNorm LN2 = nullptr;
+	torch::nn::LayerNorm LN3 = nullptr;
+	torch::nn::LayerNorm LN4 = nullptr;
+	torch::nn::LayerNorm LN5 = nullptr;
+public:
+	neuro_net_v1Impl(int observations, int actions)
+	{
+		//  /*  
+		conv1 = register_module(std::string("conv1"), torch::nn::Conv2d(torch::nn::Conv2dOptions(3, 64, 8).stride(4).padding(3)));
+		conv2 = register_module(std::string("conv2"), torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 128, 4).stride(2).padding(2)));
+		conv3 = register_module(std::string("conv3"), torch::nn::Conv2d(torch::nn::Conv2dOptions(128, 256, 3).stride(2).padding(1)));
+		conv4 = register_module(std::string("conv4"), torch::nn::Conv2d(torch::nn::Conv2dOptions(256, 256, {2,3}).stride(1)));
+		pool = register_module(std::string("pool"), torch::nn::MaxPool2d(torch::nn::MaxPool2dOptions(2).stride(2)));
+		dropout = register_module(std::string("dropout"), torch::nn::Dropout(torch::nn::DropoutOptions(0.3)));
+		Linear1 = register_module(std::string("Linear1"), NoisyLinear(64, 32));
+		Linear2 = register_module(std::string("Linear2"), torch::nn::Linear(256, 64));
+		Linear3 = register_module(std::string("Linear3"), NoisyLinear(32, 1));
+		Linear4 = register_module(std::string("Linear4"), NoisyLinear(64, 32));
+		Linear5 = register_module(std::string("Linear5"), torch::nn::Linear(256, 64));
+		Linear6 = register_module(std::string("Linear6"), NoisyLinear(32, actions));
+		acti = register_module(std::string("acti"), torch::nn::LeakyReLU());
+
+		LN1 = register_module(std::string("LN1"), torch::nn::LayerNorm(torch::nn::LayerNormOptions(std::vector<int64_t>{ 256 }).elementwise_affine(0)));
+		LN2 = register_module(std::string("LN2"), torch::nn::LayerNorm(torch::nn::LayerNormOptions(std::vector<int64_t>{ 64 }).elementwise_affine(0)));
+		LN3 = register_module(std::string("LN3"), torch::nn::LayerNorm(torch::nn::LayerNormOptions(std::vector<int64_t>{ 32 }).elementwise_affine(0)));
+		LN4 = register_module(std::string("LN4"), torch::nn::LayerNorm(torch::nn::LayerNormOptions(std::vector<int64_t>{ 64 }).elementwise_affine(0)));
+		LN5 = register_module(std::string("LN5"), torch::nn::LayerNorm(torch::nn::LayerNormOptions(std::vector<int64_t>{ 32 }).elementwise_affine(0)));
+		//  */
+
+		conv1->to(device);
+		conv1->weight.data().normal_(0, 1);
+
+		conv2->to(device);
+		conv2->weight.data().normal_(0, 1);
+
+		conv3->to(device);
+		conv3->weight.data().normal_(0, 1);
+		
+		conv4->to(device);
+		conv4->weight.data().normal_(0, 1);
+		
+
+		Linear1->to(device);
+		//Linear1->weight.data().normal_(0, 0.1);
+
+		Linear2->to(device);
+		Linear2->weight.data().normal_(0, 1);
+
+		Linear3->to(device);
+		//Linear3->weight.data().normal_(0, 0.1);
+
+		Linear4->to(device);
+		//Linear4->weight.data().normal_(0, 0.1);
+
+		Linear5->to(device);
+		Linear5->weight.data().normal_(0, 1);
+
+		Linear6->to(device);
+		//Linear6->weight.data().normal_(0, 0.1);
+		pool->to(device);
+		acti->to(device);
+		dropout->to(device);
+		LN1->to(device);
+		LN2->to(device);
+		LN3->to(device);
+		LN4->to(device);
+		LN5->to(device);
+	};//初始化
+	void reset_noise()
+	{
+		Linear1->reset_noise();
+		Linear3->reset_noise();
+		Linear4->reset_noise();
+		Linear6->reset_noise();
+	}
+	torch::Tensor forward(torch::Tensor x)
+	{
+		x = x.to(device);
+		x = x / 255.0;
+		x = conv1->forward(x);
+		x = acti(x);
+		//x = pool(x);
+
+		x = conv2->forward(x);
+		x = acti(x);
+		x = pool(x);
+
+		x = conv3->forward(x);
+		x = acti(x);
+		x = pool(x);
+
+		x = conv4->forward(x);
+		x = acti(x);
+
+		auto state_v = LN1(x.view({ x.size(0), -1 }));
+		auto action_v = state_v.clone();
+
+		state_v = Linear2->forward(state_v);
+		state_v = acti(state_v);
+		state_v = LN2(state_v);
+
+		state_v = Linear1->forward(state_v);
+		state_v = acti(state_v);
+		state_v = LN3(state_v);
+
+		state_v = Linear3->forward(state_v);
+
+		action_v = Linear5->forward(action_v);
+		action_v = acti(action_v);
+		action_v = LN4(action_v);
+
+		action_v = Linear4->forward(action_v);
+		action_v = acti(action_v);
+		action_v = LN5(action_v);
+
+		action_v = Linear6->forward(action_v);
+
+		auto action_mean = torch::mean(action_v, 1, 1);
+		x = action_v + state_v - action_mean;
+		//std::cout << "action_v:" << action_v <<std::endl<<"state_v:" << state_v <<std::endl<<"action_mean:"<< action_mean <<std::endl<<"action:" << x;
+		return x;
+	};//前向传播函数
+
+};
+TORCH_MODULE(neuro_net_v1);
